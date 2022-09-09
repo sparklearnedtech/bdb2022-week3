@@ -161,5 +161,91 @@ interface IERC20 {
 }
 
 contract IDO is Ownable {
-    
+    address public token;
+    uint256 public tokenDecimal;
+
+    uint256 public startTime;
+    uint256 public endTime;
+
+    uint256 public tokenRate;
+
+    uint256 public soldAmount;
+    uint256 public totalRaise;
+    uint256 public totalRewardToken;
+
+// sets the initial value after deployment
+    constructor (address _token, uint256 _startTime, uint256 _endTime, uint256 _tokenRate, uint256 _totalRewardToken) {
+        require(IERC20(_token).decimals() > 0);
+        require(_startTime < _endTime);
+        require(_tokenRate > 0);
+        require(_totalRewardToken > 0);
+
+        token = _token;
+        tokenDecimal = IERC20(_token).decimals();
+
+        startTime = _startTime;
+        endTime = _endTime;
+        tokenRate = _tokenRate;
+        totalRewardToken = _totalRewardToken;
+    }
+
+    function isActive() public view returns (bool) {
+        return startTime <= block.timestamp && block.timestamp <= endTime;
+    }
+
+    function getTokenInETH(uint256 _tokens) public view returns (uint256) {
+        uint256 _tokenDecimanl = 10 ** tokenDecimal;
+        return (_tokens * tokenRate) / _tokenDecimanl;
+    }
+
+    function calculateAmount(uint256 _acceptedAmount) public view returns (uint256) {
+        uint256 _tokenDecimanl = 10 ** tokenDecimal;
+        return (_acceptedAmount * _tokenDecimanl) / tokenRate;
+    }
+
+    function getRemainingReward() public view returns (uint256) {
+        return totalRewardToken - soldAmount;
+    }
+
+    function buyTokens() external payable {
+        address payable _senderAddress = _msgSender();
+        uint256 _acceptedAmount = msg.value;
+
+        require(isActive(), "Sale ended.");
+        require(_acceptedAmount > 0, "Accepted amount is zero");
+
+        uint256 _rewardedAmount = calculateAmount(_acceptedAmount);
+        uint256 _unsoldTokens = getRemainingReward();
+
+        if(_rewardedAmount > _unsoldTokens) {
+            _rewardedAmount = _unsoldTokens;
+
+            uint256 _excessAmount = _acceptedAmount - getTokenInETH(_unsoldTokens);
+            _senderAddress.transfer(_excessAmount);
+        }
+
+        require(_rewardedAmount >0, "Zero rewarded amount");
+        IERC20(token).transfer(_senderAddress, _rewardedAmount);
+        
+        soldAmount = soldAmount + _rewardedAmount;
+        totalRaise = totalRaise + getTokenInETH(_rewardedAmount);
+    }
+
+    function widthrawETHBalance() external onlyOwner {
+        address payable _sender = _msgSender();
+
+        uint256 _balance = address(this).balance;
+
+        _sender.transfer(_balance);
+    }
+
+    function widthrawRemainingTokens() external onlyOwner {
+        require(!isActive(), "Token sale is ongoing");
+
+        address payable _sender = _msgSender();
+        uint256 _remainingAmount = getRemainingReward();
+
+        IERC20(token).transfer(_sender, _remainingAmount);
+
+    }
 }
