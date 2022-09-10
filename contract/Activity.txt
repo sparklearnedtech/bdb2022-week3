@@ -1,0 +1,33 @@
+Completed Altcoin Project (Set 1)
+
+Name: Zonkkk
+Symbol: ZKK
+TOTALSUPPLY: 1000000000000000000000000
+token contract: 0x053e2F4445A4Fb02b7d464828d01eEd05d4B6057
+
+“Student should be able to send at least 100 of their tokens to the mentor (2 points)”
+Trxn hash: 0xd13e22cc4130081c4d2fa8c652369cf819febad8a160088a7eea8af883fd215c
+
+
+IDO Contract
+
+0x7fca4bFa6bC325B9b6215722803ECd0A61F87443
+latest
+0xC2a895fbe750fe93258C0708E365A8Fa36Fbf277
+IDO buy
+Trxn hash: 0xce97b6a9f6f6012cd61c1d4625de7ddadeaa1ee0070dc0bae23a0865fc440e71
+
+QmYCJqS4gmkYa24TeJk23TgPZp6A26xkEzH6UYv8x1JyJT
+QmYCJqS4gmkYa24TeJk23TgPZp6A26xkEzH6UYv8x1JyJT
+
+NFT Project
+Contract address: 0xCA1B1b958B928897e8b000eA2D5971F95A1C0384
+Trxn hash: 0x89b4c494633af82ae042c9b320d13d15f7da7917a31f4b88e7886b7865018e49
+
+INO
+INO Contract address: 0x4AB4E79f2E7194600351f5d2Ef3F222D0155F1B0
+
+
+“The student should be able to send at least one of their NFTs to the mentor
+Trxn hash: 0x64c85ac979f81fb4ef9c2796524b48eb24887e050be62a0e7c68dd3f6a20f033
+
