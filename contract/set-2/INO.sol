@@ -18,54 +18,60 @@ pragma solidity ^0.8.0;
 abstract contract Ownable {
     address private _owner;
 
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
 
     function _msgSender() internal view virtual returns (address payable) {
         return payable(msg.sender);
     }
 
     /**
-    * @dev Initializes the contract setting the deployer as the initial owner.
-    */
-    constructor () {
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
         address msgSender = _msgSender();
         _owner = msgSender;
         emit OwnershipTransferred(address(0), msgSender);
     }
 
     /**
-    * @dev Returns the address of the current owner.
-    */
+     * @dev Returns the address of the current owner.
+     */
     function owner() public view virtual returns (address) {
         return _owner;
     }
 
     /**
-    * @dev Throws if called by any account other than the owner.
-    */
+     * @dev Throws if called by any account other than the owner.
+     */
     modifier onlyOwner() {
         require(owner() == _msgSender(), "Ownable: caller is not the owner");
         _;
     }
 
     /**
-    * @dev Leaves the contract without owner. It will not be possible to call
-    * `onlyOwner` functions anymore. Can only be called by the current owner.
-    *
-    * NOTE: Renouncing ownership will leave the contract without an owner,
-    * thereby removing any functionality that is only available to the owner.
-    */
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
     function renounceOwnership() public virtual onlyOwner {
         emit OwnershipTransferred(_owner, address(0));
         _owner = address(0);
     }
 
     /**
-    * @dev Transfers ownership of the contract to a new account (`newOwner`).
-    * Can only be called by the current owner.
-    */
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
     function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        require(
+            newOwner != address(0),
+            "Ownable: new owner is the zero address"
+        );
         emit OwnershipTransferred(_owner, newOwner);
         _owner = newOwner;
     }
@@ -198,16 +204,134 @@ interface IERC721 {
      *
      * - `tokenId` must exist.
      */
-    function getApproved(uint256 tokenId) external view returns (address operator);
+    function getApproved(uint256 tokenId)
+        external
+        view
+        returns (address operator);
 
     /**
      * @dev Returns if the `operator` is allowed to manage all of the assets of `owner`.
      *
      * See {setApprovalForAll}
      */
-    function isApprovedForAll(address owner, address operator) external view returns (bool);
+    function isApprovedForAll(address owner, address operator)
+        external
+        view
+        returns (bool);
 }
 
 contract INO is Ownable {
-    
+    address public token;
+
+    uint256 public startTime;
+    uint256 public endTime;
+
+    struct NFT {
+        uint256 nftID;
+        bool isSold;
+        bool exists;
+    }
+
+    mapping(uint256 => NFT) nfts;
+
+    uint256 public tokenRate;
+
+    uint256 public totalNFTs;
+    uint256 public soldNFT;
+    uint256 public totalRaise;
+
+    constructor(
+        address _token,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _tokenRate
+    ) {
+        require(_startTime < _endTime);
+        require(_tokenRate > 0);
+
+        token = _token;
+
+        startTime = _startTime;
+        endTime = _endTime;
+        tokenRate = _tokenRate;
+    }
+
+    function addNFT(uint256[] memory _nftIDs) public onlyOwner {
+        for (uint256 x = 0; x < _nftIDs.length; x++) {
+            IERC721(token).transferFrom(msg.sender, address(this), _nftIDs[x]);
+            nfts[totalNFTs + x] = NFT(_nftIDs[x], false, true);
+        }
+
+        totalNFTs += _nftIDs.length;
+    }
+
+    function isActive() public view returns (bool) {
+        return startTime <= block.timestamp && block.timestamp <= endTime;
+    }
+
+    function getTokenInETH(uint256 _tokens) public view returns (uint256) {
+        return _tokens * tokenRate;
+    }
+
+    function calculateAmount(uint256 _acceptedAmount)
+        public
+        view
+        returns (uint256)
+    {
+        return _acceptedAmount / tokenRate;
+    }
+
+    function buyTokens() public payable {
+        address payable _senderAddress = _msgSender();
+        uint256 _acceptedAmount = msg.value;
+
+        require(isActive(), "Sale is not ACTIVE!");
+        require(_acceptedAmount > 0, "Accepted amount is ZERO");
+
+        uint256 _rewardedAmount = calculateAmount(_acceptedAmount);
+        uint256 _unsoldTokens = totalNFTs - soldNFT;
+
+        if (_rewardedAmount > _unsoldTokens) {
+            _rewardedAmount = _unsoldTokens;
+
+            uint256 _excessAmount = _acceptedAmount -
+                getTokenInETH(_unsoldTokens);
+            _senderAddress.transfer(_excessAmount);
+        }
+
+        require(_rewardedAmount > 0, "Zero rewarded amount");
+
+        for (uint256 x = soldNFT; x < soldNFT + _rewardedAmount; x++) {
+            require(!nfts[x].isSold, "NFT already SOLD!");
+            require(nfts[x].exists, "NFT does NOT exist!");
+
+            IERC721(token).transferFrom(
+                address(this),
+                _senderAddress,
+                nfts[x].nftID
+            );
+            nfts[x] = NFT(nfts[x].nftID, true, nfts[x].exists);
+        }
+
+        soldNFT += _rewardedAmount;
+        totalRaise += getTokenInETH(_rewardedAmount);
+    }
+
+    function withdrawETHBalance() external onlyOwner {
+        address payable _sender = _msgSender();
+
+        uint256 _balance = address(this).balance;
+        _sender.transfer(_balance);
+    }
+
+    function withdrawRemainingTokens() external onlyOwner {
+        require(!isActive(), "Token SALE is still ACTIVE!");
+
+        address payable _sender = _msgSender();
+
+        for (uint256 x = soldNFT; x < totalNFTs; x++) {
+            if (!nfts[x].isSold && nfts[x].exists)
+                IERC721(token).transferFrom(address(this), _sender, x);
+        }
+    }
 }
