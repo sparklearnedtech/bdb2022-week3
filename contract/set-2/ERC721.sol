@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts (last updated v4.6.0) (token/ERC721/ERC721.sol)
 
+// Author: Mat Ivan Arquero, 6:20pm 09/19/22
+
 pragma solidity ^0.8.1;
 
 /**
