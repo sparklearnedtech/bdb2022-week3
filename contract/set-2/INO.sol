@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+// Author: Mat Ivan Arquero, 5:27pm 09/20/22
+
 pragma solidity ^0.8.0;
 
 /**
@@ -209,5 +211,103 @@ interface IERC721 {
 }
 
 contract INO is Ownable {
-    
+    address public token;
+
+    uint256 public startTime;
+    uint256 public endTime;
+
+    struct NFT {
+        uint256 nftID;
+        bool isSold;
+        bool exists;
+    }
+
+    mapping(uint256 => NFT) nfts;
+
+    uint256 public tokenRate;
+
+    uint256 public totalNFTs;
+    uint256 public soldNFT;
+    uint256 public totalRaise;
+
+    constructor(address _token, uint256 _startTime, uint256 _endTime, uint256 _tokenRate) {
+        require(_startTime < _endTime);
+        require(_tokenRate > 0);
+
+        token = _token;
+
+        startTime = _startTime;
+        endTime = _endTime;
+        tokenRate = _tokenRate;
+    }
+
+    function addNFT(uint256[] memory _nftIDs) public onlyOwner {
+        for ( uint256 x = 0; x < _nftIDs.length; x++ ) {
+            IERC721(token).transferFrom(msg.sender, address(this), _nftIDs[x]);
+            nfts[totalNFTs + x] = NFT(_nftIDs[x], false, true);
+        }
+
+        totalNFTs += _nftIDs.length;
+    }
+
+    function isActive() public view returns (bool) {
+        return startTime <= block.timestamp && block.timestamp <= endTime;
+    }
+
+    function getTokenInETH(uint256 _tokens) public view returns (uint256) {
+        return _tokens * tokenRate;
+    }
+
+    function calculateAmount(uint256 _acceptedAmount) public view returns (uint256) {
+        return _acceptedAmount / tokenRate;
+    }
+
+    function buyTokens() public payable {
+        address payable _senderAddress = _msgSender();
+        uint256 _acceptedAmount = msg.value;
+
+        require(isActive(), "Sale is not active");
+        require(_acceptedAmount > 0, "Accepted amount is zero");
+
+        uint256 _rewardedAmount = calculateAmount(_acceptedAmount);
+        uint256 _unsoldTokens = totalNFTs - soldNFT;
+
+        if (_rewardedAmount > _unsoldTokens) {
+            _rewardedAmount = _unsoldTokens;
+
+            uint256 _excessAmount = _acceptedAmount - getTokenInETH(_unsoldTokens);
+            _senderAddress.transfer(_excessAmount);
+
+        }
+
+        require(_rewardedAmount > 0, "Zero rewarded amount");
+
+        for (uint256 x = soldNFT; x < soldNFT + _rewardedAmount; x++) {
+            require(!nfts[x].isSold, "NFT already sold");
+            require(nfts[x].exists, "NFT does not exist");
+
+            IERC721(token).transferFrom(address(this), _senderAddress, nfts[x].nftID);
+            nfts[x] = NFT(nfts[x].nftID, true, nfts[x].exists);
+        }
+
+        soldNFT += _rewardedAmount;
+        totalRaise += getTokenInETH(_rewardedAmount);
+    }
+
+    function withdrawETHBalance() external onlyOwner {
+        address payable _sender = _msgSender();
+
+        uint256 _balance = address(this).balance;
+        _sender.transfer(_balance);
+    }
+
+    function withdrawRemainingTokens() external onlyOwner {
+        require(!isActive(), "Token sale still active");
+
+        address payable _sender = _msgSender();
+
+        for ( uint256 x = soldNFT; x < totalNFTs; x++ ) {
+            if(!nfts[x].isSold && nfts[x].exists) IERC721(token).transferFrom(address(this), _sender, x);
+        }
+    }
 }
