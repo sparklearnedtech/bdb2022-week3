@@ -161,5 +161,104 @@ interface IERC20 {
 }
 
 contract IDO is Ownable {
-    
+    address public token;
+    uint256 public tokenDecimal;
+
+    uint256 public startTime;
+    uint256 public endTime;
+
+    uint256 public tokenRate;
+
+    uint256 public soldAmount;
+    uint256 public totalRaise;
+    uint256 public totalRewardTokens;
+
+    constructor (address _token, uint256 _startTime, uint256 _endTime, uint256 _tokenRate, uint256 _totalRewardTokens) {
+        require(IERC20(_token).decimals() > 0);
+        require(_startTime < _endTime);
+        require(_tokenRate > 0);
+        require(_totalRewardTokens > 0);
+        
+        token = _token;
+        tokenDecimal = IERC20(_token).decimals();
+
+        startTime = _startTime;
+        endTime = _endTime;
+        tokenRate = _tokenRate;
+        totalRewardTokens = _totalRewardTokens;
+    }
+
+/********* READ FUNCTIONS *********/
+
+    // Checks if IDO is active, aka ongoing
+    function isActive () public view returns (bool) {
+        return startTime <= block.timestamp && block.timestamp <= endTime;
+        
+    }
+
+    // Takes as input number of tokens to purchse
+    // Does some calculation, then returns cost in ETH
+    function getTokenInEth(uint256 _tokens) public view returns (uint256) {
+        uint256 _tokenDecimal = 10 ** tokenDecimal;
+        return (_tokens * tokenRate) / _tokenDecimal;
+    }
+
+    // Takes as input ETH paid by user
+    // Calculates number of tokens to give out
+    function calculateAmount(uint256 _acceptedAmount) public view returns (uint256) {
+        uint256 _tokenDecimal = 10 ** tokenDecimal;
+        return (_acceptedAmount * _tokenDecimal) / tokenRate;
+    }
+
+    // Returns remaining number of tokens
+    function getRemainingReward() public view returns (uint256) {
+        return totalRewardTokens - soldAmount;
+    }
+
+/********* WRITE FUNCTIONS *********/
+
+    function buyTokens() external payable {
+        address payable _senderAddress = _msgSender();
+        uint256 _acceptedAmount = msg.value;
+
+        require(isActive(), "Sale is not active!");
+        require(_acceptedAmount > 0, "Where is your payment?");
+
+        uint256 _rewardedAmount = calculateAmount(_acceptedAmount);
+        uint256 _unsoldTokens = getRemainingReward();
+
+        // If token supply is not enough to accommodate user 
+        if (_rewardedAmount > _unsoldTokens) {
+            _rewardedAmount = _unsoldTokens;
+
+            // Refund excess payment
+            uint256 _excessAmount = _acceptedAmount - getTokenInEth(_unsoldTokens);
+            _senderAddress.transfer(_excessAmount);
+        }
+
+        require(_rewardedAmount > 0, "No rewarded amount!");
+
+        // This does the actual token transfer
+        IERC20(token).transfer(_senderAddress, _rewardedAmount);
+
+        // Update IDO trakcing numbers
+        soldAmount = soldAmount + _rewardedAmount;
+        totalRaise = totalRaise + getTokenInEth(_rewardedAmount);
+    }
+
+    function withdrawETHBalance() external onlyOwner {
+        address payable _sender = _msgSender();
+
+        uint256 _balance = address(this).balance;
+        _sender.transfer(_balance);
+    }
+
+    function withdrawRemainingTokens() external onlyOwner {
+        require(!isActive(), "Token sale is still active!");
+
+        address payable _sender = _msgSender();
+        uint256 _remainingAmount = getRemainingReward();
+
+        IERC20(token).transfer(_sender, _remainingAmount);
+    } 
 }
